@@ -8,16 +8,9 @@ from datetime import date
 
 
 def test_price():
-    
     session = Session.builder.configs(conn_params).create()
-
-    show_result = st.sidebar.checkbox("Show Result", True)
-    show_graph = st.sidebar.checkbox("Show Graph", False)
-    graph_type = st.sidebar.multiselect("Select graph type:", ["Bar chart","Double Bar Chart", "Line chart", "3D Scatter Plot","Scatter Plot", "Pie chart"],default="Bar chart")
-
-
     
-    str="Know you Base Price"
+    str="‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎Know you Basic Price"
     st.title(str)
     st.sidebar.write("")
 
@@ -57,19 +50,17 @@ def test_price():
             dist_range = pd.DataFrame(dist_range)
             dr = st.selectbox("# **Distance Travelled**", options=dist_range, placeholder="Select the range")
 
-            # year = session.sql("SELECT DISTINCT MANUFACTUR_YEAR FROM SNOWPILOT_DB.RAW.CAR_INFO ORDER BY MANUFACTUR_YEAR DESC").collect()
-            # year = pd.DataFrame(year)
-            #input
             number = st.text_input(" **Manufacture Year**")
-
-            # my = st.selectbox("# **Manufacturing year**", options=year, placeholder="Select the manufacturing year of the Car")
 
             if st.button('Calculate'):
                 error=0     
                 try:
                     number = int(number)
                 except ValueError:
-                    st.write(f'<span style="font-size: 20px;">Please Enter Valid Year</span>', unsafe_allow_html=True)
+                    st.markdown(f"""<div style="                        
+                                text-align: center;                     
+                                font-size: 22px;
+                                color: #000000;">Please Enter Valid Year</div>""",unsafe_allow_html=True)               
                     number = None
                     error=1
                 
@@ -77,24 +68,34 @@ def test_price():
 
                     today = date.today()
                     age = today.year - int(number)
-                    #button
-                    basic_price = session.sql(f"select TRY_CAST(REGEXP_REPLACE(BASIC_PRICE, '\\\$', '') AS FLOAT) as baseprice from PUBLIC.car_info a join PUBLIC.car_brief b on a.MODEL_ID = b.car_id where a.car_model = '{cm}' and b.rangeinkm = '{dr}'").collect()
-                    basic_price = pd.DataFrame(basic_price)
-                    x=calculate_age_adjustment(age)
-                    value=x.loc[0][0];
-                    st.write("")
-                    st.write("")
-                    
-                    st.markdown(f"""<div style="                        
+                    print(age)
+                    if age < 0:
+                        st.markdown(f"""<div style="                        
                                 text-align: center;                     
                                 font-size: 22px;
-                                color: #000000;">The Base Price for this Vehicle is {value}  </div>""",unsafe_allow_html=True)
-
+                                color: #000000;">You have Entered Invalid Year</div>""",unsafe_allow_html=True)
+                    elif number <1981:
+                        st.markdown(f"""<div style="                        
+                                text-align: center;                     
+                                font-size: 22px;
+                                color: #000000;">You have Entered Year OutOfBound</div>""",unsafe_allow_html=True)
                     
+                    else:
+
+                        basic_price = session.sql(f"select TRY_CAST(REGEXP_REPLACE(BASIC_PRICE, '\\\$', '') AS FLOAT) as baseprice from SNOWIOT_DB.PUBLIC.CAR_INFO a join SNOWIOT_DB.PUBLIC.CAR_BRIEF b on a.MODEL_ID = b.car_id where a.car_model = '{cm}' and b.RANGEINKM = '{dr}'").collect()
+                        basic_price = pd.DataFrame(basic_price)
+                        x=calculate_age_adjustment(age)
+                        value=x.loc[0][0];
+                        st.write("")
+                        st.write("")
+                        
+                        st.markdown(f"""<div style="                        
+                                    text-align: center;                     
+                                    font-size: 22px;
+                                    color: #000000;">The Basic Price for this Vehicle is ${value}  </div>""",unsafe_allow_html=True)
+            
             else:
                 pass
-            
-            
         
     with coly:
         st.write("")
