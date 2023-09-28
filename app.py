@@ -1,5 +1,6 @@
 import openai
 import re
+import pyperclip
 import streamlit as st
 from prompts import get_system_prompt
 from snowflake.snowpark import Session
@@ -9,10 +10,8 @@ import altair as alt
 from snowflake.snowpark.functions import col
 from streamlit_option_menu import option_menu
 import pandas as pd
-from new_user_price import test_price
-
+from test_price import test_price
 st.set_page_config(layout = 'wide' , initial_sidebar_state = 'expanded')
-st.sidebar.write("")
 st.sidebar.write("")
 st.sidebar.write("")
 
@@ -25,9 +24,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
 page_selected = option_menu(
     menu_title=None,
-    options=['Home', 'New User Insurance Price'],
+    options=['Home', 'Insurance Price Quotation'],
     default_index=0,
     icons=None,
     menu_icon=None,
@@ -36,7 +36,7 @@ page_selected = option_menu(
         "container": {
             "padding": "0!important",
             "background-color": "#fafafa",
-            "width": "470px",
+            "width": "480px",
             "margin-left": "200",
                 # Adjust the width as needed
         },
@@ -59,9 +59,26 @@ page_selected = option_menu(
         "nav-link-selected": {"background-color": "#00568d", "color": "#ffffff"},
     }
 )
+faq_dict = {
+            "gmf": [
+                "Show me Insurance Price for ''Vehicle Number'' ",
+                "Show me Risky Vehicle based on Driving pattern",
+                "Tell me the VIN numbers of vehicles with an age greater than 5 years.",
+            ],
+        }
+faq = faq_dict["gmf"]
 
 
-if page_selected == 'New User Insurance Price':
+option = st.sidebar.selectbox("**FAQs**", faq)
+st.sidebar.success(option)
+
+
+show_result = st.sidebar.checkbox("Show Result", True)
+show_graph = st.sidebar.checkbox("Show Graph", False)
+graph_type = st.sidebar.multiselect("Select graph type:", ["Bar chart","Double Bar Chart", "Line chart", "3D Scatter Plot","Scatter Plot", "Pie chart"],default="Bar chart")
+
+
+if page_selected == 'Insurance Price Quotation':
 	test_price()
 if page_selected == 'Home':
     if "error" not in st.session_state:
@@ -72,14 +89,13 @@ if page_selected == 'Home':
         st.session_state.data_query = ""
         
     openai.api_key = conn_params["OPENAI_API_KEY"]
-    # print("generate prompt part ")
     if "messages" not in st.session_state:
         # system prompt includes table information, rules, and prompts the LLM to produce
         # a welcome message to the user.
         st.session_state.messages = [{"role": "system", "content": get_system_prompt()}]
     if "intt" not in st.session_state:
         st.session_state.intt=0
-
+  
 
     sql_displayed = False   
     # Prompt for user input and save
@@ -87,21 +103,14 @@ if page_selected == 'Home':
         st.session_state.intt=1
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-     # print("for message loop")
     #display the existing chat messages
     for message in st.session_state.messages:
         if message["role"] == "system":
             continue
 
         with st.chat_message(message["role"],avatar=("https://yshah1505.blob.core.windows.net/logo/Assistant.png" if message["role"] == "assistant" else "🧑")):
-
-            # if message["content"][0]=="#":
-            #     x=0
-            # else:
             st.write(f'<span style="font-size: 22px;">{message["content"]}</span>', unsafe_allow_html=True)
 
-            # if "results" in message:
-            #     st.dataframe(message["results"])
     sql=""
     query_found = 0
     # If last message is not from assistant, we need to generate a new response
@@ -115,20 +124,14 @@ if page_selected == 'Home':
                 messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
                 stream=True,
             ):
-                # print(delta)
                 response += delta.choices[0].delta.get("content", "")       
                 resp_container.markdown(f"""<div style="
                         font-size: 20px;
                         ">{response}</div>""",unsafe_allow_html=True)
-                # print([{"role": m["role"], "content": m["content"]} for m in st.session_state.messages])
-            # print(type(response))
-            sql_match = re.search(r"```sql\n(.*)\n```", response, re.DOTALL)
 
-            
+            sql_match = re.search(r"```sql\n(.*)\n```", response, re.DOTALL) 
             message = {"role": "assistant", "content": response}
-            
             sql_match = re.search(r"```sql\n(.*)\n```", response, re.DOTALL)
-
             message["results"]=[]
 
             if sql_match:
@@ -144,25 +147,12 @@ if page_selected == 'Home':
                 except Exception as e:
                     st.session_state.error = 1
                     # Handle the error gracefully and display a custom message
-                    custom_error_message = "An error has occurreddd: " + str(e)
+                    custom_error_message = "An error has occurred: " + str(e)
                     
-                    st.error.write(f'<span style="font-size: 20px;">{custom_error_message}.</span>', unsafe_allow_html=True)
+                    st.error(f'{custom_error_message}')
                     st.write(f'<span style="font-size: 20px;">Please Try Again.</span>', unsafe_allow_html=True)
-                    
-
-                # session = Session.builder.configs(conn_params).create()
-                # message["results"] = session.sql(sql).collect()
-                # print(message["results"])
-                
             st.session_state.messages.append(message)
-
-    show_result = st.sidebar.checkbox("Show Result", True)
-    show_graph=0
-    # df=message["results"].toPandas()  
     
-    
-    show_graph = st.sidebar.checkbox("Show Graph", False)
-    graph_type = st.sidebar.multiselect("Select graph type:", ["Bar chart","Double Bar Chart", "Line chart", "3D Scatter Plot","Scatter Plot", "Pie chart"],default="Bar chart")
 
     if show_result:
         vin=None
@@ -170,89 +160,78 @@ if page_selected == 'Home':
             st.write("")
         elif message["results"]== []:  
                 
-                # pattern = r"SELECT DISCOUNT_PREMIUM_PRICE FROM .* VIN = '(\w+)' .*"
-                pattern = r"SELECT\s+DISCOUNT_PREMIUM_PRICE\s+FROM\s+.*\s+VIN\s*=\s*'(\w+)'\s+.*"
-                pattern2= r"SELECT\s+DISCOUNT_PREMIUM_PRICE\s+FROM\s+.*\s+VIN\s*=\s*'(\w+)'(\s*;)?$"
-                
+                # pattern = r"SELECT FINAL_PREMIUM_PRICE FROM .* VIN = '(\w+)' .*"
+                pattern = r"SELECT\s+FINAL_PREMIUM_PRICE\s+FROM\s+.*\s+VIN\s*=\s*'(\w+)'\s+.*"
+                pattern2= r"SELECT\s+FINAL_PREMIUM_PRICE\s+FROM\s+.*\s+VIN\s*=\s*'(\w+)'(\s*;)?$"
+                pattern3=r"SELECT\s+FINAL_PREMIUM_PRICE\s+FROM\s+[^;]*\s+WHERE\s+VIN\s+(?i)(?:ILIKE|LIKE)\s+'%?([^%']+)%?'"
                 match = re.search(pattern, sql, flags=re.DOTALL)
                 match2= re.search(pattern2, sql, flags=re.DOTALL)
-                # st.write(match)
+                match3= re.search(pattern3, sql, flags=re.DOTALL)
+                
                 if match:
-                    # st.write(sql)
                     vin = match.group(1)
                     pattern_vin = r'^[A-Z0-9]{17}$'                  
-                    # st.write(vin)
                     if (re.match(pattern_vin, vin)) :
-                        st.error("You have entered valid VIN but not available in the database. Go for the New Tab to find the Basic Price")
-                        
+                        st.error("Valid VIN, not in the database. Open a New Tab to find the Basic Price.")
                     else:
                         st.error("You have entered Invalid VIN")
                                         
                 elif match2:
-                    # st.write(sql)
                     vin = match2.group(1)
-
                     pattern_vin = r'^[A-Z0-9]{17}$'
-                    # st.write(vin)
                     print(type(vin))
                     if(re.match(pattern_vin, vin)) :
-                        st.error("You have entered valid VIN but not available in the database. Go for the New Tab to find the Basic Price")
-                        
+                        st.error("Valid VIN, not in the database. Open a New Tab to find the Basic Price.")
                     else:
                         st.error("You have entered Invalid VIN")
+
+                elif match3:
+                    vin = match3.group(1)
+                    pattern_vin = r'^[A-Z0-9]{17}$'
+                    print(type(vin))
+                    if(re.match(pattern_vin, vin)) :
+                        st.error("Valid VIN, not in the database. Open a New Tab to find the Basic Price.")
+                    else:
+                        st.error("You have entered Invalid VIN")
+
                 else:
                     if st.session_state.error == 0:
                         if query_found == 0:
                             pass
                         else:
-                            st.write(f'<span style="font-size: 20px;">We didn''t find any result regarding you prompt</span>', unsafe_allow_html=True)
-            # st.dataframe(message["results"])   
+                            st.write(f'<span style="font-size: 20px;">We didn''t find any result regarding you prompt</span>', unsafe_allow_html=True)   
         else:
             data_frame = message["results"]   
             column_names = data_frame[0].asDict().keys()
-
+            num_rows=2
+            num_rows = len(data_frame)
             num_columns = len(column_names)
-            # Get the column names from the DataFrame
-            # Print or display the column names
             column_names_list = list(column_names)
-            # st.write(column_names_list[0]) # gets the column naem
-            # st.dataframe(message["results"])
-            if(column_names_list[0].upper() == "ML_PRICE" or column_names_list[0].upper() == "PREMIUM_PRICE" or  column_names_list[0].upper() == "INSURANCE_PRICE") or column_names_list[0].upper() == "DISCOUNT_PREMIUM_PRICE":
-                formatted_number = "{:.2f}".format(message["results"][0][0])
-                st.markdown(f"""<div style="                        
-                        text-align: center;                     
-                        font-size: 22px;
-                        ">The Premium Price for this vehicle is {formatted_number}</div>""",unsafe_allow_html=True)
-                #  st.write(f'<span style="font-size: 50px;">{centered_markdown}</span>', unsafe_allow_html=True)
-                # st.write(f"The Premium Price for this vehicle is {message['results'][0][0]}")
             
+            if(column_names_list[0].upper() == "FINAL_PREMIUM_PRICE"):
+                formatted_number = "{:.2f}".format(message["results"][0][0])
+                if(num_rows > 1):
+                    st.dataframe(message["results"])
+                else:
+
+                    st.markdown(f"""<div style="                        
+                            text-align: center;                     
+                            font-size: 22px;
+                            ">The Premium Price for this vehicle is ${formatted_number}</div>""",unsafe_allow_html=True)
+                    
             else:  
                 st.dataframe(message["results"])
     else:
         st.write("")
 
-    # if show_sql:
-    #         # Display st.session_state.data_query with Markdown decoration
-    #     if st.session_state.data_query:
-    #         # f'<span style="font-size: 24px;">{var}</span>', unsafe_allow_html=True
-    #         centered_markdown = f'<div style="text-align: center;">\n\n**SQL Query:**\n\n```sql\n{st.session_state.data_query}\n```\n\n</div>'
-    #         st.markdown(centered_markdown, unsafe_allow_html=True)
-    #         # st.markdown(f"**SQL Query:**\n```sql\n{st.session_state.data_query}\n```")
-
-
     if show_graph and st.session_state.data_query:
         df = pd.DataFrame(message["results"])
-        
-
         for i in graph_type:
             if i == "Bar chart":
                 left_columns, right_columns , more_columns = st.columns(3)
-
-    # Create a dropdown menu in the left column
                 with left_columns:    
                     x_column_bar = st.selectbox("# **Select x-axis column for Bar chart**", df.columns)
 
-    # Create a dropdown menu in the right column
                 with right_columns:    
                     y_column_bar = st.selectbox("# **Select y-axis column for Bar chart**", df.columns)
                 fig = px.bar(df.head(10), x=x_column_bar, y=y_column_bar)
@@ -262,15 +241,12 @@ if page_selected == 'Home':
                     title=f"Bar Chart of {x_column_bar} vs {y_column_bar}"
                 )
                 st.plotly_chart(fig)
-            elif i == "Double Bar Chart":
 
-                left_columns, right_columns ,more_columns = st.columns(3)
-                
-    # Create a dropdown menu in the left column
+
+            elif i == "Double Bar Chart":
+                left_columns, right_columns ,more_columns = st.columns(3)                
                 with left_columns:    
                     x_columns_double = st.selectbox("# **Select x-axis column for  Double Bar Chart**", df.columns)
-
-    # Create a dropdown menu in the right column
                 with right_columns:    
                     y_columns_double = st.selectbox("# **Select y-axis column for Double Bar Chart**", df.columns)
 
@@ -285,27 +261,22 @@ if page_selected == 'Home':
                                   
                     full_df = df[selected_columns].copy()
                     new_df = full_df.head(11)
-                    # st.write(new_df)
-
                     source=pd.melt(new_df, id_vars=[x_columns_double])
                     chart=alt.Chart(source).mark_bar(strokeWidth=100).encode(
-                    x=alt.X('variable:N', title="", scale=alt.Scale(paddingOuter=0.1)),#paddingOuter - you can play with a space between 2 models 
+                    x=alt.X('variable:N', title="", scale=alt.Scale(paddingOuter=0.1)), 
                     y='value:Q',
                     color='variable:N',
-                    column=alt.Column(x_columns_double, title="", spacing =0), #spacing =0 removes space between columns, column for can and st 
+                    column=alt.Column(x_columns_double, title="", spacing =0), 
                     ).properties( width = 100, height = 150, ).configure_header(labelOrient='bottom').configure_view(
                     strokeOpacity=0)
-
                     st.altair_chart(chart)
+
 
             elif i == "Line chart":
                 left_columns, right_columns = st.columns(2)
-
-    # Create a dropdown menu in the left column
                 with left_columns:    
                     x_columns_line = st.selectbox("# **Select x-axis column for Line chart**", df.columns)
 
-    # Create a dropdown menu in the right column
                 with right_columns:    
                     y_columns_line = st.selectbox("# **Select y-axis column for Line chart**", df.columns)
 
@@ -316,16 +287,13 @@ if page_selected == 'Home':
                     title=f"Line Chart of {x_columns_line} vs {y_columns_line}"
                 )
                 st.plotly_chart(fig)
+
+
             elif i == "3D Scatter Plot":
-
-
                 left_columns, right_columns ,more_columns = st.columns(3)
-
-    # Create a dropdown menu in the left column
                 with left_columns:    
                     x_columns_3d_scatter = st.selectbox("# **Select x-axis column for 3D Scatter Plot**", df.columns)
 
-    # Create a dropdown menu in the right column
                 with right_columns:    
                     y_columns_3d_scatter = st.selectbox("# **Select y-axis column for 3D Scatter Plot**", df.columns)
 
@@ -342,15 +310,14 @@ if page_selected == 'Home':
                     title=f"3D Scatter Plot of {x_columns_3d_scatter}, {y_columns_3d_scatter}, {z_columns_3d_scatter}"
                 )
                 st.plotly_chart(fig)
+
+
+
             elif i == "Scatter Plot":
-
                 left_columns, right_columns  = st.columns(2)
-
-    # Create a dropdown menu in the left column
                 with left_columns:    
                     x_columns_scatter = st.selectbox("# **Select x-axis column for Scatter Plot**", df.columns)
 
-    # Create a dropdown menu in the right column
                 with right_columns:    
                     y_columns_scatter = st.selectbox("# **Select y-axis column for Scatter Plot**", df.columns)
 
@@ -361,13 +328,13 @@ if page_selected == 'Home':
                     title=f"Scatter Plot of {x_columns_scatter} vs {y_columns_scatter}"
                 )
                 st.plotly_chart(fig)
+
+
             else:
                 left_columns, right_columns  = st.columns(2)
 
-                # Create a dropdown menu in the left column
                 with left_columns:    
                     x_columns_pie = st.selectbox("# **Select x-axis column for Pie Chart**", df.columns)
-                # Create a dropdown menu in the right column
                 with right_columns:    
                     y_columns_pie = st.selectbox("# **Select y-axis column for Pie Chart**", df.columns)
 
@@ -376,5 +343,3 @@ if page_selected == 'Home':
                     title=f"Pie Chart of {x_columns_pie} vs {y_columns_pie}"
                 )
                 st.plotly_chart(fig)
-    
-    
