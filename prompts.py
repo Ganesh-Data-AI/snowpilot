@@ -10,6 +10,7 @@ GEN_SQL = """
 You will be acting as SnowPilot (an AI Snowflake SQL expert). 
 Your goal is to provide correct, executable SQL queries to users.
  You will be replying to users who may be confused if you don't respond as an AI Snowflake SQL expert.
+ Only repond based on the below data provided.
    You are given multiple tables, and each table name is enclosed in <tableName> tags, with columns listed in <columns> tags. The user will ask questions, and for each question, you should respond with an SQL query based on the question and the table.
 
 
@@ -17,8 +18,8 @@ Your goal is to provide correct, executable SQL queries to users.
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                                                                                                                                    
 Here are critical rules for the interaction you must abide:
 <rules>
-0. To calculate fuel usage during a trip, use the "fuel_used_first" column, but ensure that the event code is either "TripStart" or "TripEnd." Subtract the "fuel_used_first" value at the "TripStart" event from the value at the corresponding "TripEnd" event to get the fuel used during that trip.
-1. If the users asks regarding the insurance price of this vehicle number then go for SNOWIOT_DB.MAIN.INSURANCE_PREMIUM_PRICE and the column name as DISCOUNT_PREMIUM_PRICE.
+0. If the users asks about driver driving quality or which vehicle condition is bettter then go for DRIVING_SCORE COLUMN FROM SNOWIOT_DB.MAIN.INSURANCE_PREMIUM_PRICE and DO NOT use 'ilike' or 'like' here while finding the insurance price.
+1. If the users asks regarding the insurance price of this vehicle number then go for SNOWIOT_DB.MAIN.INSURANCE_PREMIUM_PRICE and the column name as FINAL_PREMIUM_PRICE.
 2. You MUST wrap the generated SQL queries within ``` sql code markdown in this format e.g
 ```sql
 (select 1) union (select 2)
@@ -33,7 +34,7 @@ This markdown down can only be used one in single response
 9. You should only use the table columns given in <columns>, and the table given in <tableName>, you MUST NOT hallucinate about the table names.
 10. DO NOT put numerical at the very front of SQL variable.
 11. If the column name is not avilable in the table then don't mention it in the query.
-12. Consider the seatbelt indicator column (DRIVER_SEATBELT_INDICATOR_FIRST) in the silver table when the question is about LATCHED or UNLATCHED of seatbelt.
+12. Consider the seatbelt indicator column (DRIVER_SEATBELT_INDICATOR) in the silver table when the question is about LATCHED or UNLATCHED of seatbelt.
 13. use "ilike %keyword%" for fuzzy match queries (especially for string datatypes in where condition)
 
 </rules>
@@ -56,12 +57,10 @@ def get_table_context(db_name: str ,schema_name: str):
         WHERE TABLE_SCHEMA = '{schema_name}' AND TABLE_TYPE ILIKE 'BASE TABLE'
 """
     context=""
-    # conn = st.experimental_connection("snowpark")
 
     session = Session.builder.configs(conn_params).create()
     tables = session.sql(query).to_pandas()
-    # print(type(tables))
-    # make a loop
+    
     table_names = [
     f"{tables['TABLE_NAME'][i]}"
     for i in range(len(tables["TABLE_NAME"]))
@@ -72,13 +71,11 @@ def get_table_context(db_name: str ,schema_name: str):
         context= context + f" {i+1}. {DATABASE}.{SCHEMA}.{tables['TABLE_NAME'][i]}" + "\n";
 
     columns_info = {}
-    # table = table_name.split(".")
     
     for table_name in table_names:
 
         updated_table_names=f"{DATABASE}.{SCHEMA}.{table_name}"
         
-        # context = context + f"Here is the table name <tableName> {updated_table_names} </tableName>  \n"
         column_descriptions="";
         columns_query = f"""
             SELECT COLUMN_NAME, DATA_TYPE FROM {db_name}.INFORMATION_SCHEMA.COLUMNS
@@ -99,12 +96,7 @@ def get_table_context(db_name: str ,schema_name: str):
         else:
             columns_info[table_name] = column_descriptions
         
-        
-    
-    # updated_table_names = [{QUALIFIED_DB_NAME}+"."+{QUALIFIED_SCHEMA_NAME} + str(item) for item in table_names]     
-#     context = f"""DATABASE NAME = {DATABASE}\n \nSCHEMA NAME= {SCHEMA}\n\n<tableName>\n\n{updated_table_names}\n\n</tableName>\n \n
-# <columns>\n\n{columns_info}\n\n</columns>
-#     """  
+          
     return context
 
 def get_system_prompt():
@@ -113,6 +105,7 @@ def get_system_prompt():
         schema_name = SCHEMA
     )
     return GEN_SQL.format(context=table_context)
+
 
 # do `streamlit run prompts.py` to view the initial system prompt in a Streamlit app
 if __name__ == "__main__":
