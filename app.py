@@ -1,6 +1,5 @@
 import openai
 import re
-import pyperclip
 import streamlit as st
 from prompts import get_system_prompt
 from snowflake.snowpark import Session
