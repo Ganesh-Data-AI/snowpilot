@@ -1,5 +1,4 @@
 conn_params = {
-"OPENAI_API_KEY" : "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",
 "account" : "anblicksorg_aws",
 "region" : "us-east-1",
 "user" : "SNOWIOT",
