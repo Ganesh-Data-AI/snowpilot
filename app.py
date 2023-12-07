@@ -11,7 +11,7 @@ from streamlit_option_menu import option_menu
 import pandas as pd
 from test_price import test_price
 
-openai.api_key  : "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"
+openai.api_key  : "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"
 
 st.set_page_config(layout = 'wide' , initial_sidebar_state = 'expanded')
 st.sidebar.write("")
