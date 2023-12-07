@@ -9,7 +9,6 @@
 
 
 conn_params = {
-"OPENAI_API_KEY" : "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",
 "account" : "KB93590",
 "region" : "ap-southeast-1",
 "user" : "Nandini19",
