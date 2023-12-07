@@ -11,7 +11,7 @@ from streamlit_option_menu import option_menu
 import pandas as pd
 from test_price import test_price
 
-openai.api_key  : "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"
+
 
 st.set_page_config(layout = 'wide' , initial_sidebar_state = 'expanded')
 st.sidebar.write("")
@@ -90,7 +90,7 @@ if page_selected == 'Home':
     if "data_query" not in st.session_state:
         st.session_state.data_query = ""
         
-    
+    openai.api_key = st.secrets["api_key"]
     if "messages" not in st.session_state:
         # system prompt includes table information, rules, and prompts the LLM to produce
         # a welcome message to the user.
