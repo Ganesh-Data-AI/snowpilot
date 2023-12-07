@@ -90,7 +90,7 @@ if page_selected == 'Home':
     if "data_query" not in st.session_state:
         st.session_state.data_query = ""
         
-    openai.api_key = "OPENAI_API_KEY"
+    
     if "messages" not in st.session_state:
         # system prompt includes table information, rules, and prompts the LLM to produce
         # a welcome message to the user.
